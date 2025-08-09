@@ -7,6 +7,7 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { fileTypeFromFile } from 'file-type';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +21,18 @@ fs.mkdirSync(PUBLIC_DIR, { recursive: true });
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 if (!fs.existsSync(USERS_FILE)) {
     fs.writeFileSync(USERS_FILE, JSON.stringify([], null, 2));
+}
+
+// ---------- helpers ----------
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+}
+function clientIp(req) {
+    const fwd = req.headers['x-forwarded-for'];
+    return (typeof fwd === 'string' && fwd.split(',')[0].trim()) || req.ip;
 }
 
 // ---------- helpers: users ----------
@@ -102,8 +115,10 @@ const storage = multer.diskStorage({
         cb(null, `${uuidv4()}${ext}`);
     }
 });
+
 const upload = multer({
     storage,
+    // quick header-based guard (can be spoofed, but catches most)
     fileFilter: (req, file, cb) => {
         const ok = /image\/(jpeg|png|webp|gif|heic|heif)/i.test(file.mimetype);
         if (!ok) return cb(new Error('Only image files are allowed (jpeg/png/webp/gif/heic)'));
@@ -135,10 +150,12 @@ app.post('/api/users', async (req, res) => {
     users.unshift(user);
     await writeUsers(users);
     await ensureUser(id);
+
+    console.log(`[USER CREATE] ip=${clientIp(req)} user="${name}" id=${id}`);
     res.status(201).json(user);
 });
 
-// (Optional) delete user only if no albums
+// Delete user only if no albums
 app.delete('/api/users/:userId', async (req, res) => {
     const { userId } = req.params;
     const users = await readUsers();
@@ -149,8 +166,10 @@ app.delete('/api/users/:userId', async (req, res) => {
     if (albums.length > 0) return res.status(400).json({ error: 'User has albums' });
 
     try { await fsp.rm(userDir(userId), { recursive: true, force: true }); } catch { }
-    users.splice(idx, 1);
+    const removed = users.splice(idx, 1)[0];
     await writeUsers(users);
+
+    console.log(`[USER DELETE] ip=${clientIp(req)} user="${removed?.name || userId}" id=${userId}`);
     res.json({ ok: true });
 });
 
@@ -185,6 +204,8 @@ app.post('/api/users/:userId/albums', async (req, res) => {
     albums.unshift(album);
     await writeAlbums(userId, albums);
     await ensureAlbum(userId, id);
+
+    console.log(`[ALBUM CREATE] ip=${clientIp(req)} album="${name}" id=${id}`);
     res.status(201).json(album);
 });
 
@@ -199,8 +220,10 @@ app.delete('/api/users/:userId/albums/:albumId', async (req, res) => {
     if (meta.length > 0) return res.status(400).json({ error: 'Album is not empty' });
 
     try { await fsp.rm(albumDir(userId, albumId), { recursive: true, force: true }); } catch { }
-    albums.splice(idx, 1);
+    const removed = albums.splice(idx, 1)[0];
     await writeAlbums(userId, albums);
+
+    console.log(`[ALBUM DELETE] ip=${clientIp(req)} album="${removed?.name || albumId}" id=${albumId}`);
     res.json({ ok: true });
 });
 
@@ -227,6 +250,7 @@ app.get('/api/users/:userId/albums/:albumId/photos', async (req, res) => {
     res.json(out);
 });
 
+// STRICT IMAGE VALIDATION + LOGGING
 app.post('/api/users/:userId/albums/:albumId/upload', upload.array('photos', 200), async (req, res) => {
     try {
         const { userId, albumId } = req.params;
@@ -236,21 +260,58 @@ app.post('/api/users/:userId/albums/:albumId/upload', upload.array('photos', 200
             return res.status(400).json({ error: 'No files uploaded' });
         }
 
+        // Logging: who, what, how big
+        const totalBytes = req.files.reduce((sum, f) => sum + (f.size || 0), 0);
+        console.log(`[UPLOAD START] ip=${clientIp(req)} albumId=${albumId} files=${req.files.length} size=${formatBytes(totalBytes)}`);
+
         const caption = (req.body.caption || '').toString().slice(0, 300);
         const meta = await readAlbumMeta(userId, albumId);
         const created = [];
 
         for (const f of req.files) {
+            const absPath = f.path;
+
+            // Content-based detection
+            let detected;
+            try { detected = await fileTypeFromFile(absPath); } catch { }
+            if (!detected || !detected.mime || !detected.mime.startsWith('image/')) {
+                try { await fsp.unlink(absPath); } catch { }
+                console.warn(`[UPLOAD REJECT] ip=${clientIp(req)} albumId=${albumId} file="${f.originalname}" reason=not_image`);
+                return res.status(400).json({ error: `Only image files are allowed. Rejected: ${f.originalname}` });
+            }
+
+            const ALLOWED_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif']);
+            const ext = (detected.ext || '').toLowerCase();
+            if (!ALLOWED_IMAGE_EXTS.has(ext)) {
+                try { await fsp.unlink(absPath); } catch { }
+                console.warn(`[UPLOAD REJECT] ip=${clientIp(req)} albumId=${albumId} file="${f.originalname}" mime=${detected.mime} reason=unsupported_type`);
+                return res.status(400).json({ error: `Unsupported image type (${detected.mime}). Allowed: ${[...ALLOWED_IMAGE_EXTS].join(', ')}` });
+            }
+
+            // Normalize extension if needed
+            const currentExt = path.extname(absPath).slice(1).toLowerCase();
+            let finalFilename = path.basename(absPath);
+            if (currentExt !== ext) {
+                const newName = `${uuidv4()}.${ext}`;
+                const newPath = path.join(path.dirname(absPath), newName);
+                await fsp.rename(absPath, newPath);
+                finalFilename = newName;
+            }
+
             const id = uuidv4();
-            const record = { id, filename: f.filename, caption, uploadedAt: new Date().toISOString() };
+            const record = { id, filename: finalFilename, caption, uploadedAt: new Date().toISOString() };
             meta.unshift(record);
-            created.push({ id, url: `/uploads/${userId}/${albumId}/${f.filename}`, caption: record.caption });
+            created.push({ id, url: `/uploads/${userId}/${albumId}/${finalFilename}`, caption: record.caption });
+
+            console.log(`[UPLOAD FILE] ip=${clientIp(req)} albumId=${albumId} saved="${finalFilename}" size=${formatBytes(f.size || 0)} mime=${detected.mime}`);
         }
 
         await writeAlbumMeta(userId, albumId, meta);
+        console.log(`[UPLOAD DONE] ip=${clientIp(req)} albumId=${albumId} created=${created.length} totalSize=${formatBytes(req.files.reduce((s, f) => s + (f.size || 0), 0))}`);
+
         res.status(201).json({ ok: true, created, count: created.length });
     } catch (err) {
-        console.error(err);
+        console.error('[UPLOAD ERROR]', err);
         res.status(500).json({ error: 'Upload failed' });
     }
 });
@@ -266,9 +327,11 @@ app.delete('/api/users/:userId/albums/:albumId/photos/:photoId', async (req, res
         try { await fsp.unlink(path.join(albumDir(userId, albumId), filename)); } catch { }
         meta.splice(idx, 1);
         await writeAlbumMeta(userId, albumId, meta);
+
+        console.log(`[PHOTO DELETE] ip=${clientIp(req)} photoId=${photoId} file="${filename}"`);
         res.json({ ok: true });
     } catch (e) {
-        console.error(e);
+        console.error('[DELETE ERROR]', e);
         res.status(500).json({ error: 'Delete failed' });
     }
 });
@@ -276,7 +339,7 @@ app.delete('/api/users/:userId/albums/:albumId/photos/:photoId', async (req, res
 // error handler (multer/others)
 app.use((err, req, res, next) => {
     if (err) {
-        console.error('Error:', err);
+        console.error('[ERROR HANDLER]', err);
         const status = err.name === 'MulterError' ? 400 : 500;
         return res.status(status).json({ error: err.message || 'Server error' });
     }
@@ -289,6 +352,6 @@ app.get('*', (req, res, next) => {
     res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
-app.listen(PORT,'0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`Family Photos server running at http://localhost:${PORT}`);
 });

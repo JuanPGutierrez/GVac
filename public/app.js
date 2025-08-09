@@ -1,4 +1,4 @@
-// public/app.js
+﻿// public/app.js
 
 // --------- elements & templates ----------
 const view = document.getElementById('view');
@@ -10,7 +10,23 @@ const tplCreateUser = document.getElementById('createUserTemplate');
 const tplAlbums = document.getElementById('albumsTemplate');
 const tplCreateAlbum = document.getElementById('createAlbumTemplate');
 const tplAlbum = document.getElementById('albumTemplate');
+const homeBtn = document.getElementById('homeBtn');
+homeBtn?.addEventListener('click', () => navigate('#/users'));
 
+(function () {
+    const PASSCODE = "162028";
+    let entered = sessionStorage.getItem("passcodeOK");
+
+    if (!entered) {
+        const code = prompt("Enter access code:");
+        if (code === PASSCODE) {
+            sessionStorage.setItem("passcodeOK", "true");
+        } else {
+            alert("Incorrect code. Access denied.");
+            window.location.href = "about:blank"; // block them
+        }
+    }
+})();
 // --------- API ----------
 async function api(path, opts = {}) {
     const res = await fetch(path, opts);
@@ -124,11 +140,12 @@ async function renderUserAlbums(userId) {
     setPrimary('New Album', () => navigate(`#/user/${userId}/albums/new`));
 
     // fetch user name for crumbs
+    let userName = '';
     try {
         const users = await Users.list();
         const u = users.find(x => x.id === userId);
+        userName = u?.name || '';
         crumbs.textContent = u ? `Home > ${u.name}` : 'Albums';
-
     } catch {
         crumbs.textContent = 'Albums';
     }
@@ -137,10 +154,40 @@ async function renderUserAlbums(userId) {
     view.append(node);
     const container = view.querySelector('.albums');
 
+    // ⬇️ Helper to show the delete-user action when no albums exist
+    function showDeleteUserAction() {
+        // prevent duplicates if we re-render
+        const existing = view.querySelector('.user-actions');
+        if (existing) existing.remove();
+
+        const actions = document.createElement('div');
+        actions.className = 'user-actions';
+        const del = document.createElement('button');
+        del.className = 'danger';
+        del.textContent = 'Delete User';
+        del.addEventListener('click', async () => {
+            const label = userName ? `"${userName}"` : 'this user';
+            if (!confirm(`Delete user ${label}? This cannot be undone.`)) return;
+            try {
+                await Users.del(userId);
+                navigate('#/users'); // back to all users
+            } catch (err) {
+                alert('Delete failed: ' + (err?.message || ''));
+            }
+        });
+
+        actions.appendChild(del);
+        // place it near the empty-state message
+        // (container exists even when empty, so this is a safe anchor)
+        container.appendChild(actions);
+    }
+
     try {
         const albums = await Albums.list(userId);
         if (!albums.length) {
             container.innerHTML = '<p>No albums yet. Create one!</p>';
+            // ✅ show delete user if no albums exist
+            showDeleteUserAction();
             return;
         }
         albums.forEach(a => container.appendChild(albumCard(userId, a)));
@@ -148,6 +195,7 @@ async function renderUserAlbums(userId) {
         container.textContent = 'Could not load albums.';
     }
 }
+
 function albumCard(userId, a) {
     const div = document.createElement('div');
     div.className = 'album-card';
@@ -209,7 +257,7 @@ async function renderAlbum(userId, albumId) {
     try {
         const users = await Users.list();
         const u = users.find(x => x.id === userId);
-        crumbs.textContent = u ? `Family Photos > ${u.name} > Album` : 'Album';
+        crumbs.textContent = u ? `Home > ${u.name} > Album` : 'Album';
     } catch {
         crumbs.textContent = 'Album';
     }
