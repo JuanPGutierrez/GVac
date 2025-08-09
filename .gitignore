@@ -1,0 +1,23 @@
+# IDE/OS
+.vs/
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Node / tooling
+node_modules/
+npm-debug.log*
+pnpm-lock.yaml
+yarn.lock
+
+# Env
+backend/.env
+
+# Runtime data (do not commit)
+uploads/
+backend/uploads/
+**/uploads/
+**/users.json
+**/albums.json
+**/metadata.json

@@ -1,0 +1,275 @@
+:root {
+    font-family: system-ui, Arial, sans-serif;
+}
+
+body {
+    margin: 0;
+    background: #111;
+    color: #eee;
+}
+
+header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #1b1b1b;
+    position: sticky;
+    top: 0;
+}
+
+nav button {
+    margin-left: 8px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+main {
+    padding: 16px;
+}
+
+.albums {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.album-card {
+    background: #1c1c1c;
+    border-radius: 12px;
+    padding: 12px;
+    cursor: pointer;
+}
+
+    .album-card h3 {
+        margin: 0 0 6px;
+    }
+
+    .album-card p {
+        margin: 0;
+        color: #aaa;
+        font-size: 14px;
+    }
+
+.gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.card {
+    background: #1c1c1c;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+    .card img {
+        width: 100%;
+        display: block;
+    }
+
+    .card footer {
+        padding: 8px 10px;
+        font-size: 14px;
+        color: #ccc;
+    }
+
+    .card .actions {
+        display: flex;
+        gap: 8px;
+        padding: 8px 10px;
+        border-top: 1px solid #2a2a2a;
+    }
+
+button.danger {
+    background: #5a1b1b;
+    color: #eee;
+}
+
+#createAlbumForm, #uploadForm {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+#uploadStatus, #createAlbumStatus {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #7fe37f;
+}
+.album-card {
+    position: relative;
+}
+
+.album-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+button[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.users, .albums {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.user-card, .album-card {
+    background: #1c1c1c;
+    border-radius: 12px;
+    padding: 12px;
+    cursor: pointer;
+}
+
+    .user-card h3, .album-card h3 {
+        margin: 0 0 6px;
+    }
+
+    .user-card p, .album-card p {
+        margin: 0;
+        color: #aaa;
+        font-size: 14px;
+    }
+
+.gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.card {
+    background: #1c1c1c;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+    .card img {
+        width: 100%;
+        display: block;
+    }
+
+    .card footer {
+        padding: 8px 10px;
+        font-size: 14px;
+        color: #ccc;
+    }
+
+    .card .actions {
+        display: flex;
+        gap: 8px;
+        padding: 8px 10px;
+        border-top: 1px solid #2a2a2a;
+    }
+
+button.danger {
+    background: #5a1b1b;
+    color: #eee;
+}
+
+#createUserForm, #createAlbumForm, #uploadForm {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+#uploadStatus, #createAlbumStatus, #createUserStatus {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #7fe37f;
+}
+
+button[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.users, .albums {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.user-card, .album-card {
+    background: #1c1c1c;
+    border-radius: 12px;
+    padding: 12px;
+    cursor: pointer;
+}
+
+    .user-card h3, .album-card h3 {
+        margin: 0 0 6px;
+    }
+
+    .user-card p, .album-card p {
+        margin: 0;
+        color: #aaa;
+        font-size: 14px;
+    }
+
+.gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.card {
+    background: #1c1c1c;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+    .card img {
+        width: 100%;
+        display: block;
+    }
+
+    .card footer {
+        padding: 8px 10px;
+        font-size: 14px;
+        color: #ccc;
+    }
+
+    .card .actions {
+        display: flex;
+        gap: 8px;
+        padding: 8px 10px;
+        border-top: 1px solid #2a2a2a;
+    }
+
+button.danger {
+    background: #5a1b1b;
+    color: #eee;
+}
+
+#createUserForm, #createAlbumForm, #uploadForm {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+#uploadStatus, #createAlbumStatus, #createUserStatus {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #7fe37f;
+}
+
+button[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.hidden {
+    display: none;
+}
+#uploadForm.hidden {
+    display: none !important;
+}

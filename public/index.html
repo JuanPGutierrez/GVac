@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Family Photos</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <header>
+        <h1 id="crumbs">Family Photos</h1>
+        <nav>
+            <button id="primaryAction">New User</button>
+        </nav>
+    </header>
+
+    <main id="view"></main>
+
+    <!-- Users list -->
+    <template id="usersTemplate">
+        <section class="users"></section>
+    </template>
+
+    <!-- Create user -->
+    <template id="createUserTemplate">
+        <section class="create-user">
+            <form id="createUserForm">
+                <input type="text" name="name" placeholder="Person's name" required maxlength="60" />
+                <button type="submit">Create User</button>
+            </form>
+            <div id="createUserStatus"></div>
+        </section>
+    </template>
+
+    <!-- Albums list for a user -->
+    <template id="albumsTemplate">
+        <section class="albums"></section>
+    </template>
+
+    <!-- Create album (under a user) -->
+    <template id="createAlbumTemplate">
+        <section class="create-album">
+            <form id="createAlbumForm">
+                <input type="text" name="name" placeholder="Album name" required maxlength="60" />
+                <button type="submit">Create Album</button>
+            </form>
+            <div id="createAlbumStatus"></div>
+        </section>
+    </template>
+
+    <!-- Album detail with gallery + multi-upload -->
+    <template id="albumTemplate">
+        <section class="album">
+            <h2 id="albumTitle"></h2>
+
+            <!-- Hidden by default; JS will reveal on "Add Pictures" -->
+            <form id="uploadForm" class="hidden" enctype="multipart/form-data">
+                <input type="file" name="photos" id="photosInput" accept="image/*" multiple required />
+                <input type="text" name="caption" placeholder="Caption (optional for all files)" />
+                <button type="submit">Upload to Album</button>
+                <div id="uploadStatus"></div>
+            </form>
+
+            <section class="gallery"></section>
+        </section>
+    </template>
+
+
+    <script src="/app.js" type="module"></script>
+</body>
+</html>
