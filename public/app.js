@@ -27,6 +27,7 @@ homeBtn?.addEventListener('click', () => navigate('#/users'));
         }
     }
 })();
+
 // --------- API ----------
 async function api(path, opts = {}) {
     const res = await fetch(path, opts);
@@ -77,6 +78,86 @@ window.addEventListener('hashchange', route);
 function setPrimary(label, handler) {
     primaryBtn.textContent = label;
     primaryBtn.onclick = handler;
+}
+
+// --- Gallery helpers ---
+const PAGE_SIZE = 20;
+
+function thumbFrom(url) {
+    // If you later store thumbs at /thumbs/, this will use them.
+    // Otherwise, fallback to the original URL.
+    if (!url) return url;
+    const swapped = url.replace('/originals/', '/thumbs/');
+    return swapped === url ? url : swapped;
+}
+
+function makePager() {
+    const bar = document.createElement('div');
+    bar.className = 'pager';
+    const prev = document.createElement('button');
+    prev.textContent = 'Prev';
+    const info = document.createElement('span');
+    info.className = 'pager-info';
+    const next = document.createElement('button');
+    next.textContent = 'Next';
+    bar.append(prev, info, next);
+    return { bar, prev, next, info };
+}
+
+// --- Lightbox (transparent background, image floats above app) ---
+let _lightbox;
+function ensureLightbox() {
+    if (_lightbox) return _lightbox;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'lightbox'; // CSS makes background transparent
+    overlay.setAttribute('aria-hidden', 'true');
+
+    const frame = document.createElement('div');
+    frame.className = 'lightbox-frame';
+
+    const img = document.createElement('img');
+    img.className = 'lightbox-img';
+    img.alt = '';
+
+    const cap = document.createElement('div');
+    cap.className = 'lightbox-caption';
+
+    frame.appendChild(img);
+    frame.appendChild(cap);
+    overlay.appendChild(frame);
+    document.body.appendChild(overlay);
+
+    let open = false;
+    let currentSrc = '';
+
+    function show(src, caption = '') {
+        if (open && currentSrc === src) {
+            hide();
+            return;
+        }
+        currentSrc = src;
+        img.src = src;
+        cap.textContent = caption;
+        overlay.classList.add('visible');
+        overlay.setAttribute('aria-hidden', 'false');
+        open = true;
+    }
+    function hide() {
+        overlay.classList.remove('visible');
+        overlay.setAttribute('aria-hidden', 'true');
+        currentSrc = '';
+        open = false;
+    }
+    // click anywhere closes
+    overlay.addEventListener('click', hide);
+    // Esc closes
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') hide();
+    });
+
+    _lightbox = { show, hide, toggle: show };
+    return _lightbox;
 }
 
 // --------- views ----------
@@ -156,7 +237,6 @@ async function renderUserAlbums(userId) {
 
     // ⬇️ Helper to show the delete-user action when no albums exist
     function showDeleteUserAction() {
-        // prevent duplicates if we re-render
         const existing = view.querySelector('.user-actions');
         if (existing) existing.remove();
 
@@ -170,15 +250,13 @@ async function renderUserAlbums(userId) {
             if (!confirm(`Delete user ${label}? This cannot be undone.`)) return;
             try {
                 await Users.del(userId);
-                navigate('#/users'); // back to all users
+                navigate('#/users');
             } catch (err) {
                 alert('Delete failed: ' + (err?.message || ''));
             }
         });
 
         actions.appendChild(del);
-        // place it near the empty-state message
-        // (container exists even when empty, so this is a safe anchor)
         container.appendChild(actions);
     }
 
@@ -186,7 +264,6 @@ async function renderUserAlbums(userId) {
         const albums = await Albums.list(userId);
         if (!albums.length) {
             container.innerHTML = '<p>No albums yet. Create one!</p>';
-            // ✅ show delete user if no albums exist
             showDeleteUserAction();
             return;
         }
@@ -243,17 +320,13 @@ async function renderAlbum(userId, albumId) {
     const albumSection = view.querySelector('.album');
     const fileInput = form.querySelector('#photosInput');
 
-    // hide on load (template already hidden, but this is safe)
     form.classList.add('hidden');
 
-    // top-right action: reveal form + open chooser
     setPrimary('Add Pictures', () => {
         form.classList.remove('hidden');
         fileInput?.click();
     });
 
-
-    // crumbs
     try {
         const users = await Users.list();
         const u = users.find(x => x.id === userId);
@@ -262,37 +335,45 @@ async function renderAlbum(userId, albumId) {
         crumbs.textContent = 'Album';
     }
 
-    // show album name/initial count
     try {
         const albums = await Albums.list(userId);
         const album = albums.find(a => a.id === albumId);
         if (album) title.textContent = `${album.name} (${album.count})`;
     } catch { /* ignore */ }
 
-    // delete button appears only when empty
     let deleteWrap = null;
 
-    async function loadPhotos() {
+    // --- pagination state ---
+    let allPhotos = [];
+    let currentPage = 1;
+
+    // bottom pager only
+    const { bar: pagerBottom, prev: prevBottom, next: nextBottom, info: infoBottom } = makePager();
+
+    function updatePager(total) {
+        const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        currentPage = Math.min(currentPage, totalPages);
+        const label = `Page ${total ? currentPage : 0} of ${total ? totalPages : 0}`;
+        infoBottom.textContent = label;
+
+        const canPrev = currentPage > 1;
+        const canNext = currentPage < totalPages;
+        prevBottom.disabled = !canPrev;
+        nextBottom.disabled = !canNext;
+    }
+
+    function renderPage() {
         container.innerHTML = '';
         if (deleteWrap && deleteWrap.parentNode) deleteWrap.remove();
         deleteWrap = null;
 
-        try {
-            const photos = await Albums.photos(userId, albumId);
+        const total = allPhotos.length;
+        updatePager(total);
 
-            // keep count updated in title
-            if (title && typeof title.textContent === 'string') {
-                const current = title.textContent;
-                const hasCount = /\(\d+\)$/.test(current);
-                title.textContent = hasCount
-                    ? current.replace(/\(\d+\)$/, `(${photos.length})`)
-                    : `${current} (${photos.length})`;
-            }
-
-            if (!Array.isArray(photos) || photos.length === 0) {
-                container.textContent = 'This album is empty.';
-
-                // Offer delete if empty
+        if (!total) {
+            container.textContent = 'This album is empty.';
+            // Offer delete if empty
+            (async () => {
                 try {
                     const albums = await Albums.list(userId);
                     const album = Array.isArray(albums) ? albums.find(a => a.id === albumId) : null;
@@ -306,7 +387,7 @@ async function renderAlbum(userId, albumId) {
                             if (!confirm(`Delete album "${album.name}"? This cannot be undone.`)) return;
                             try {
                                 await Albums.del(userId, album.id);
-                                navigate(`#/user/${userId}`); // back to that user's album list
+                                navigate(`#/user/${userId}`);
                             } catch (err) {
                                 alert('Delete failed: ' + (err?.message || ''));
                             }
@@ -317,17 +398,66 @@ async function renderAlbum(userId, albumId) {
                 } catch (e) {
                     console.warn('Could not determine album deletability:', e);
                 }
+            })();
+            return;
+        }
 
-            } else {
-                photos.forEach(p => container.appendChild(photoCard(userId, albumId, p)));
+        const start = (currentPage - 1) * PAGE_SIZE;
+        const end = Math.min(start + PAGE_SIZE, total);
+        const slice = allPhotos.slice(start, end);
+        slice.forEach(p => container.appendChild(photoCard(userId, albumId, p, {
+            onDelete: () => {
+                // remove from master list and re-render page
+                const idx = allPhotos.findIndex(x => x.id === p.id);
+                if (idx >= 0) allPhotos.splice(idx, 1);
+                // if page became empty and not first page, step back
+                const totalAfter = allPhotos.length;
+                const totalPagesAfter = Math.max(1, Math.ceil(totalAfter / PAGE_SIZE));
+                if (currentPage > totalPagesAfter) currentPage = totalPagesAfter;
+                renderPage();
+                // keep title count in sync
+                if (title && typeof title.textContent === 'string') {
+                    const current = title.textContent;
+                    const hasCount = /\(\d+\)$/.test(current);
+                    const newCount = allPhotos.length;
+                    title.textContent = hasCount
+                        ? current.replace(/\(\d+\)$/, `(${newCount})`)
+                        : `${current} (${newCount})`;
+                }
             }
+        })));
+    }
+
+    // hook up bottom pager buttons
+    prevBottom.addEventListener('click', () => { if (currentPage > 1) { currentPage--; renderPage(); } });
+    nextBottom.addEventListener('click', () => {
+        const max = Math.max(1, Math.ceil(allPhotos.length / PAGE_SIZE));
+        if (currentPage < max) { currentPage++; renderPage(); }
+    });
+
+    // mount bottom pager
+    albumSection.appendChild(pagerBottom);
+
+    async function loadPhotos() {
+        try {
+            const photos = await Albums.photos(userId, albumId);
+            // update title count
+            if (title && typeof title.textContent === 'string') {
+                const current = title.textContent;
+                const hasCount = /\(\d+\)$/.test(current);
+                title.textContent = hasCount
+                    ? current.replace(/\(\d+\)$/, `(${photos.length})`)
+                    : `${current} (${photos.length})`;
+            }
+            allPhotos = Array.isArray(photos) ? photos : [];
+            currentPage = 1;
+            renderPage();
         } catch (err) {
             console.error('Failed to load photos:', err);
             container.textContent = 'Could not load photos.';
         }
     }
 
-    // multi-file upload
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         status.textContent = 'Uploading...';
@@ -345,29 +475,41 @@ async function renderAlbum(userId, albumId) {
     await loadPhotos();
 }
 
-
-function photoCard(userId, albumId, { id, url, caption }) {
+function photoCard(userId, albumId, { id, url, caption }, { onDelete } = {}) {
     const div = document.createElement('div');
     div.className = 'card';
+
     const img = document.createElement('img');
     img.loading = 'lazy';
-    img.src = url;
+    const thumbUrl = thumbFrom(url);
+    img.src = thumbUrl;
+
     const footer = document.createElement('footer');
     footer.textContent = caption || '';
+
     const actions = document.createElement('div');
     actions.className = 'actions';
+
     const del = document.createElement('button');
     del.className = 'danger';
     del.textContent = 'Delete';
-    del.addEventListener('click', async () => {
+    del.addEventListener('click', async (e) => {
+        e.stopPropagation(); // don't trigger lightbox
         try {
             await Albums.deletePhoto(userId, albumId, id);
-            div.remove();
+            onDelete?.();
         } catch (err) {
             alert('Delete failed: ' + (err?.message || ''));
         }
     });
+
     actions.appendChild(del);
+
+    // open lightbox (transparent background, image floats)
+    div.addEventListener('click', () => {
+        const lb = ensureLightbox();
+        lb.toggle(url, caption);
+    });
 
     div.append(img, footer, actions);
     return div;
