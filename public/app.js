@@ -1,4 +1,9 @@
 ﻿// public/app.js
+// [2025-08-13] Change log:
+// - Breadcrumb in Album view now shows the ACTUAL album name the user clicked.
+//   * In renderAlbum(): cache userName after loading users.
+//   * After loading the album, set crumbs to `Home > ${userName} > ${album.name}`.
+//   * No other behavior changed.
 
 // --------- elements & templates ----------
 const view = document.getElementById('view');
@@ -163,7 +168,7 @@ function ensureLightbox() {
 // --------- views ----------
 async function renderUsers() {
     view.innerHTML = '';
-    crumbs.textContent = 'Home';
+    crumbs.textContent = 'GutiPhotos';
     setPrimary('New User', () => navigate('#/users/new'));
 
     const node = tplUsers.content.cloneNode(true);
@@ -226,7 +231,7 @@ async function renderUserAlbums(userId) {
         const users = await Users.list();
         const u = users.find(x => x.id === userId);
         userName = u?.name || '';
-        crumbs.textContent = u ? `Home > ${u.name}` : 'Albums';
+        crumbs.textContent = u ? `GutiPhotos > ${u.name}` : 'Albums';
     } catch {
         crumbs.textContent = 'Albums';
     }
@@ -320,6 +325,9 @@ async function renderAlbum(userId, albumId) {
     const albumSection = view.querySelector('.album');
     const fileInput = form.querySelector('#photosInput');
 
+    // NEW: keep user's name to build the final crumb with album name
+    let userName = '';
+
     form.classList.add('hidden');
 
     setPrimary('Add Pictures', () => {
@@ -330,7 +338,8 @@ async function renderAlbum(userId, albumId) {
     try {
         const users = await Users.list();
         const u = users.find(x => x.id === userId);
-        crumbs.textContent = u ? `Home > ${u.name} > Album` : 'Album';
+        userName = u?.name || '';
+        crumbs.textContent = u ? `GutiPhotos > ${u.name} > Album` : 'Album';
     } catch {
         crumbs.textContent = 'Album';
     }
@@ -338,7 +347,13 @@ async function renderAlbum(userId, albumId) {
     try {
         const albums = await Albums.list(userId);
         const album = albums.find(a => a.id === albumId);
-        if (album) title.textContent = `${album.name} (${album.count})`;
+        if (album) {
+            title.textContent = `${album.name} (${album.count})`;
+            // NEW: update breadcrumb to show the actual album name
+            crumbs.textContent = userName
+                ? `GutiPhotos > ${userName} > ${album.name}`
+                : album.name;
+        }
     } catch { /* ignore */ }
 
     let deleteWrap = null;

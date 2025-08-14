@@ -124,7 +124,7 @@ const upload = multer({
         if (!ok) return cb(new Error('Only image files are allowed (jpeg/png/webp/gif/heic)'));
         cb(null, true);
     },
-    limits: { fileSize: 1 * 1024 * 1024 * 1024, files: 200 } // 1GB per file
+    limits: { fileSize: 1 * 1024 * 1024 * 1024, files: 250 } // 1GB per file
 });
 
 // =================== USERS ===================
@@ -251,7 +251,7 @@ app.get('/api/users/:userId/albums/:albumId/photos', async (req, res) => {
 });
 
 // STRICT IMAGE VALIDATION + LOGGING
-app.post('/api/users/:userId/albums/:albumId/upload', upload.array('photos', 200), async (req, res) => {
+app.post('/api/users/:userId/albums/:albumId/upload', upload.array('photos', 250), async (req, res) => {
     try {
         const { userId, albumId } = req.params;
         const albums = await readAlbums(userId);
